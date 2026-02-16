@@ -1,0 +1,9 @@
+Write a single-file Go program that implements a concurrent URL health checker. Given a slice of URLs, check each concurrently and return which are reachable (HTTP 200) and which failed, along with response times. Include:
+
+1. A struct to hold results (URL, status, response time, error if any)
+2. Concurrent checking using goroutines and channels
+3. A timeout of 5 seconds per request
+4. Proper use of sync.WaitGroup or similar
+5. A simple main() that demonstrates it with 5 sample URLs
+
+Keep everything in a single file with clear comments.
