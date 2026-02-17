@@ -55,7 +55,7 @@ func main() {
 
 	// Configuration
 	config := Config{
-		GenerationTimeout: 15 * time.Minute, // Allow time for models to iterate and fix errors
+		GenerationTimeout: 15 * time.Minute, // Allow time for models to generate and self-correct with bash access
 		CompileTimeout:    30 * time.Second,
 		ExecutionTimeout:  10 * time.Second,
 		OutputDir:         "output",

@@ -64,17 +64,17 @@ This tool automatically:
 
 ## Results
 
-Current test results show **4 out of 5 models (80%) successfully generate, compile, and execute** working Go programs:
+Current test results with self-correction prompting show **3 out of 5 models (60%) successfully generate, compile, and execute** working Go programs:
 
 | Model | Status | LOC | Time |
 | ------- | -------- | ----- | ------ |
-| glm-4.7-flash | ✅ | ~130 | 3-7min |
-| glm-5 | ✅ | ~115 | 15-90s |
-| glm-4.7 | ✅ | ~100 | 8-14s |
-| gpt-oss:20b | ✅ | ~100 | 40-100s |
-| qwen3-coder | ⚠️ Inconsistent | 0-110 | 55-100s |
+| glm-5:cloud | ✅ | ~131 | 2min |
+| glm-4.7:cloud | ✅ | ~111 | 29s |
+| gpt-oss:20b | ✅ | ~98 | 6min |
+| glm-4.7-flash:latest | ❌ | 0 | 4min (compile errors) |
+| qwen3-coder:30b | ❌ | 0 | 15min (timeout) |
 
-**Note**: qwen3-coder sometimes outputs code via XML text format (which works), other times tries to write files directly and gets permission rejected (fails).
+**Note**: With bash enabled, models can now attempt to compile and fix errors during generation. Results show some models self-correct successfully while others still fail.
 
 ## How It Works
 
