@@ -55,7 +55,7 @@ func main() {
 
 	// Configuration
 	config := Config{
-		GenerationTimeout: 8 * time.Minute, // Increased for slower models like glm-4.7-flash
+		GenerationTimeout: 15 * time.Minute, // Allow time for models to iterate and fix errors
 		CompileTimeout:    30 * time.Second,
 		ExecutionTimeout:  10 * time.Second,
 		OutputDir:         "output",

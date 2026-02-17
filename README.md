@@ -67,7 +67,7 @@ This tool automatically:
 Current test results show **4 out of 5 models (80%) successfully generate, compile, and execute** working Go programs:
 
 | Model | Status | LOC | Time |
-|-------|--------|-----|------|
+| ------- | -------- | ----- | ------ |
 | glm-4.7-flash | ✅ | ~130 | 3-7min |
 | glm-5 | ✅ | ~115 | 15-90s |
 | glm-4.7 | ✅ | ~100 | 8-14s |
@@ -87,6 +87,7 @@ Current test results show **4 out of 5 models (80%) successfully generate, compi
    - No external directory access
    - Read-only access to .go, go.mod, go.sum files
 3. **Generation**: For each model, invokes `opencode run --dir <dir> -m "ollama/<model>" --format json` with the prompt
+   - **Self-Correction**: The prompt instructs models to verify and fix compilation errors themselves (like interactive OpenCode usage)
 4. **Extraction**: Smart extraction from multiple formats:
    - Direct file creation (GLM models)
    - Markdown code blocks (gpt-oss)
@@ -137,11 +138,13 @@ Each model runs with **ultra-restrictive permissions** defined in `opencode.json
 ```
 
 This ensures models can **ONLY**:
+
 - Create/edit .go files in their isolated test directory
 - Read .go, go.mod, go.sum files
 - List directory contents
 
 Models **CANNOT**:
+
 - Execute shell commands
 - Access parent directories or other project files
 - Create non-.go files
@@ -151,7 +154,7 @@ Models **CANNOT**:
 
 Edit the `Config` struct in `main.go` to adjust:
 
-- `GenerationTimeout`: Max time for code generation (default: 8 minutes)
+- `GenerationTimeout`: Max time for code generation (default: 15 minutes)
 - `CompileTimeout`: Max time for compilation (default: 30 seconds)
 - `ExecutionTimeout`: Max time for program execution (default: 10 seconds)
 - `PromptFile`: Path to prompt file (default: `prompt.txt`)

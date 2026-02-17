@@ -7,3 +7,5 @@ Write a single-file Go program that implements a concurrent URL health checker. 
 5. A simple main() that demonstrates it with 5 sample URLs
 
 Keep everything in a single file with clear comments.
+
+IMPORTANT: After generating the code, please attempt to compile it and fix any compilation errors. Iterate until the code compiles successfully without errors.
