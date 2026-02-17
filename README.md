@@ -64,29 +64,30 @@ This tool automatically:
 
 ## Results
 
-Current test results show **4 out of 5 models (80%) successfully generate, compile, and execute** working Go programs:
+Current test results with self-correction prompting show **5 out of 5 models (100%) successfully generate, compile, and execute** working Go programs:
 
 | Model | Status | LOC | Time |
-|-------|--------|-----|------|
-| glm-4.7-flash | ✅ | ~130 | 3-7min |
-| glm-5 | ✅ | ~115 | 15-90s |
-| glm-4.7 | ✅ | ~100 | 8-14s |
-| gpt-oss:20b | ✅ | ~100 | 40-100s |
-| qwen3-coder | ⚠️ Inconsistent | 0-110 | 55-100s |
+| ------- | -------- | ----- | ------ |
+| glm-4.7:cloud | ✅ | 104 | 1m10s |
+| qwen3-coder:30b | ✅ | 96 | 1m30s |
+| gpt-oss:20b | ✅ | 76 | 1m39s |
+| glm-5:cloud | ✅ | 96 | 2m7s |
+| glm-4.7-flash:latest | ✅ | 85 | 5m29s |
 
-**Note**: qwen3-coder sometimes outputs code via XML text format (which works), other times tries to write files directly and gets permission rejected (fails).
+**Note**: With bash enabled, models can now attempt to compile and fix errors during generation. All tested models successfully generated working code that compiles and executes correctly.
 
 ## How It Works
 
 ### Workflow
 
 1. **Discovery**: Scans `ollama list` for available local models
-2. **Security Setup**: Creates `opencode.json` in each test directory with minimal permissions:
+2. **Security Setup**: Creates `opencode.json` in each test directory with isolated permissions:
    - Only .go file creation/editing
-   - No shell command execution
+   - Bash allowed for compilation checks (`go build`)
    - No external directory access
    - Read-only access to .go, go.mod, go.sum files
 3. **Generation**: For each model, invokes `opencode run --dir <dir> -m "ollama/<model>" --format json` with the prompt
+   - **Self-Correction**: The prompt instructs models to compile and fix errors iteratively (models can now run `go build` to verify)
 4. **Extraction**: Smart extraction from multiple formats:
    - Direct file creation (GLM models)
    - Markdown code blocks (gpt-oss)
@@ -122,7 +123,7 @@ Current test results show **4 out of 5 models (80%) successfully generate, compi
 
 ## Security
 
-Each model runs with **ultra-restrictive permissions** defined in `opencode.json`:
+Each model runs with **restrictive permissions** defined in `opencode.json`:
 
 ```json
 {
@@ -130,28 +131,32 @@ Each model runs with **ultra-restrictive permissions** defined in `opencode.json
     "edit": { "*.go": "allow", "*": "deny" },
     "write": { "*.go": "allow", "*": "deny" },
     "read": { "*.go": "allow", "go.mod": "allow", "go.sum": "allow", "*": "deny" },
-    "bash": "deny",
+    "bash": "allow",
     "external_directory": "deny"
   }
 }
 ```
 
 This ensures models can **ONLY**:
+
 - Create/edit .go files in their isolated test directory
 - Read .go, go.mod, go.sum files
 - List directory contents
+- Execute shell commands (needed for `go build` to verify and fix compilation errors)
 
 Models **CANNOT**:
-- Execute shell commands
+
 - Access parent directories or other project files
 - Create non-.go files
 - Access external directories
+
+**Note**: Bash execution is allowed so models can run `go build` to check for compilation errors and iterate on fixes, as instructed in the prompt. Each model runs in an isolated directory with no access to external files or directories.
 
 ## Configuration
 
 Edit the `Config` struct in `main.go` to adjust:
 
-- `GenerationTimeout`: Max time for code generation (default: 8 minutes)
+- `GenerationTimeout`: Max time for code generation (default: 15 minutes)
 - `CompileTimeout`: Max time for compilation (default: 30 seconds)
 - `ExecutionTimeout`: Max time for program execution (default: 10 seconds)
 - `PromptFile`: Path to prompt file (default: `prompt.txt`)

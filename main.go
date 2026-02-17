@@ -55,7 +55,7 @@ func main() {
 
 	// Configuration
 	config := Config{
-		GenerationTimeout: 8 * time.Minute, // Increased for slower models like glm-4.7-flash
+		GenerationTimeout: 15 * time.Minute, // Allow time for models to generate and self-correct with bash access
 		CompileTimeout:    30 * time.Second,
 		ExecutionTimeout:  10 * time.Second,
 		OutputDir:         "output",
@@ -280,10 +280,11 @@ func generateCode(modelName, prompt, workDir string, timeout time.Duration) (str
 	start := time.Now()
 
 	// Create opencode.json config to allow file edits (needed for models like qwen3-coder)
-	// SECURITY: Ultra-restrictive permissions
+	// SECURITY: Restrictive permissions with bash allowed for compilation
 	// - Working directory is set via --dir flag to the isolated test directory
 	// - Only .go files in the working directory root (no subdirectories, no parent access)
-	// - No shell commands, no external directory access
+	// - Bash allowed so models can run `go build` to verify and fix compilation errors
+	// - No external directory access
 	// - Read limited to .go and go.mod files only
 	configContent := `{
   "$schema": "https://opencode.ai/config.json",
@@ -303,7 +304,7 @@ func generateCode(modelName, prompt, workDir string, timeout time.Duration) (str
       "*": "deny"
     },
     "list": "allow",
-    "bash": "deny",
+    "bash": "allow",
     "external_directory": "deny"
   }
 }`
