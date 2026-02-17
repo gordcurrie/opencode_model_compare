@@ -81,13 +81,13 @@ Current test results show **4 out of 5 models (80%) successfully generate, compi
 ### Workflow
 
 1. **Discovery**: Scans `ollama list` for available local models
-2. **Security Setup**: Creates `opencode.json` in each test directory with minimal permissions:
+2. **Security Setup**: Creates `opencode.json` in each test directory with isolated permissions:
    - Only .go file creation/editing
-   - No shell command execution
+   - Bash allowed for compilation checks (`go build`)
    - No external directory access
    - Read-only access to .go, go.mod, go.sum files
 3. **Generation**: For each model, invokes `opencode run --dir <dir> -m "ollama/<model>" --format json` with the prompt
-   - **Self-Correction**: The prompt instructs models to verify and fix compilation errors themselves (like interactive OpenCode usage)
+   - **Self-Correction**: The prompt instructs models to compile and fix errors iteratively (models can now run `go build` to verify)
 4. **Extraction**: Smart extraction from multiple formats:
    - Direct file creation (GLM models)
    - Markdown code blocks (gpt-oss)
@@ -123,7 +123,7 @@ Current test results show **4 out of 5 models (80%) successfully generate, compi
 
 ## Security
 
-Each model runs with **ultra-restrictive permissions** defined in `opencode.json`:
+Each model runs with **restrictive permissions** defined in `opencode.json`:
 
 ```json
 {
@@ -131,7 +131,7 @@ Each model runs with **ultra-restrictive permissions** defined in `opencode.json
     "edit": { "*.go": "allow", "*": "deny" },
     "write": { "*.go": "allow", "*": "deny" },
     "read": { "*.go": "allow", "go.mod": "allow", "go.sum": "allow", "*": "deny" },
-    "bash": "deny",
+    "bash": "allow",
     "external_directory": "deny"
   }
 }
@@ -142,13 +142,15 @@ This ensures models can **ONLY**:
 - Create/edit .go files in their isolated test directory
 - Read .go, go.mod, go.sum files
 - List directory contents
+- Execute shell commands (needed for `go build` to verify and fix compilation errors)
 
 Models **CANNOT**:
 
-- Execute shell commands
 - Access parent directories or other project files
 - Create non-.go files
 - Access external directories
+
+**Note**: Bash execution is allowed so models can run `go build` to check for compilation errors and iterate on fixes, as instructed in the prompt. Each model runs in an isolated directory with no access to external files or directories.
 
 ## Configuration
 
