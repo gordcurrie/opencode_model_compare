@@ -1,4 +1,6 @@
-# Active Task: Fresh 3-Run Benchmark with gpt-oss Fix
+# ~~Active Task~~ COMPLETED: Fresh 3-Run Benchmark with gpt-oss Fix
+
+> **Status: Done.** All steps completed February 21–22, 2026. Reviews and overview in `reviews/`. See `README.md` for results.
 
 ## Background
 

@@ -236,7 +236,7 @@ make diff
 
 ### Notes
 
-- **Cloud models are skipped**: Models with `:cloud` suffix are excluded (they require remote API access)
+- **Cloud models are included**: Despite the `:cloud` suffix, `glm-5:cloud` and `glm-4.7:cloud` are usable via OpenCode's provider routing — they appear in `ollama list` and are tested alongside local models
 - **Each model gets isolated directory**: Prevents Go package naming conflicts
 - **Generated code is preserved**: You can manually inspect, test, or modify any model's output
 - **Sequential execution**: Models are tested one at a time to avoid resource contention and ensure accurate timing
