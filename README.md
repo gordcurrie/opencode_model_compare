@@ -1,34 +1,51 @@
-# OpenCode Model Comparison Framework
+# OpenCode Model Comparison
 
-A comprehensive testing framework for comparing the performance of different Ollama models using OpenCode CLI.
+This repo benchmarks AI coding models by having each one generate the same Go program via the [OpenCode](https://opencode.ai/) CLI, then compiling and running the result. Three runs have been completed across six models.
 
-## Overview
+---
 
-This tool automatically:
+## Just here for the results?
 
-- Detects available Ollama models on your system
-- Runs the same coding prompt through each model via OpenCode
-- Generates isolated output for each model (avoiding Go package conflicts)
-- Compiles and executes the generated code
-- Performs code quality analysis
-- Produces a detailed comparison report
+**Start here:** [reviews/model-overview-all-runs.md](reviews/model-overview-all-runs.md)
 
-## Features
+Pros, cons, and a bottom-line verdict for every model across all three runs. Takes about 5 minutes to read.
 
-- **Fully Automated**: One command runs all tests
-- **Security-First**: Each model runs in an isolated directory with minimal permissions (no shell access, no external directory access)
-- **Comprehensive Metrics**: Generation time, compilation success, execution results, LOC, code quality
-- **Multi-Format Support**: Handles both file-writing models (GLM) and markdown output models (gpt-oss)
-- **Smart Extraction**: Automatically extracts code from JSON/XML/markdown output formats
+For deeper dives:
 
-## Requirements
+| Document | What it covers |
+|----------|----------------|
+| [model-overview-all-runs.md](reviews/model-overview-all-runs.md) | Cross-run rankings, key findings, model-by-model verdicts |
+| [code-review-run3-and-comparison.md](reviews/code-review-run3-and-comparison.md) | Run 3 individual reviews + three-run comparison tables |
+| [code-review-run2.md](reviews/code-review-run2.md) | Run 2 individual code reviews |
+| [code-review-run1.md](reviews/code-review-run1.md) | Run 1 individual code reviews |
+
+The raw benchmark reports (what the tool actually measured, including benchmark false negatives that the reviews correct for) are in [reviews/comparison-report-run1.md](reviews/comparison-report-run1.md), [run2](reviews/comparison-report-run2.md), and [run3](reviews/comparison-report-run3.md).
+
+### Quick scoreboard (3-run corrected pass rate)
+
+| Model | Type | Size | Passes | Avg Gen Time | Avg Quality |
+|-------|------|------|--------|--------------|-------------|
+| `qwen3-coder:30b` | Local | 18 GB | 3/3 | ~2 min | ⭐⭐⭐⭐ |
+| `glm-4.7:cloud` | Cloud | — | 3/3 | ~20 s | ⭐⭐⭐⭐ |
+| `glm-5:cloud` | Cloud | — | 3/3 | ~25 s | ⭐⭐⭐ |
+| `gpt-oss:20b` | Local | 13 GB | 2/3¹ | ~1 min | ⭐⭐⭐⭐ |
+| `glm-4.7-flash:latest` | Local | 19 GB | 3/3 | ~7 min | ⭐⭐⭐ |
+| `qwen3-coder-next:q4_K_M` | Local | 51 GB | 2/3 | ~9 min | ⭐⭐⭐⭐⭐ |
+
+¹ Run 1 was a pre-fix tool-schema bug. Post-fix: 2/2 (100%).
+
+---
+
+## Want to run it yourself?
+
+### Requirements
 
 - Go 1.18+
 - [Ollama](https://ollama.ai/) installed and running
 - [OpenCode](https://opencode.ai/) CLI configured with Ollama
 - Local Ollama models downloaded
 
-## Quick Start
+### Quick Start
 
 1. **Run the comparison:**
 
@@ -62,23 +79,9 @@ This tool automatically:
    make help
    ```
 
-## Results
+### How It Works
 
-Current test results with self-correction prompting show **5 out of 5 models (100%) successfully generate, compile, and execute** working Go programs:
-
-| Model | Status | LOC | Time |
-| ------- | -------- | ----- | ------ |
-| glm-4.7:cloud | ✅ | 104 | 1m10s |
-| qwen3-coder:30b | ✅ | 96 | 1m30s |
-| gpt-oss:20b | ✅ | 76 | 1m39s |
-| glm-5:cloud | ✅ | 96 | 2m7s |
-| glm-4.7-flash:latest | ✅ | 85 | 5m29s |
-
-**Note**: With bash enabled, models can now attempt to compile and fix errors during generation. All tested models successfully generated working code that compiles and executes correctly.
-
-## How It Works
-
-### Workflow
+#### Workflow
 
 1. **Discovery**: Scans `ollama list` for available local models
 2. **Security Setup**: Creates `opencode.json` in each test directory with isolated permissions:
@@ -98,7 +101,7 @@ Current test results with self-correction prompting show **5 out of 5 models (10
 8. **Analysis**: Checks formatting (gofmt), linting (go vet), and code metrics
 9. **Reporting**: Generates markdown report comparing all models
 
-### Directory Structure
+#### Directory Structure
 
 ```txt
 .
@@ -121,7 +124,7 @@ Current test results with self-correction prompting show **5 out of 5 models (10
     └── comparison-report-*.md
 ```
 
-## Security
+### Security
 
 Each model runs with **restrictive permissions** defined in `opencode.json`:
 
@@ -152,7 +155,7 @@ Models **CANNOT**:
 
 **Note**: Bash execution is allowed so models can run `go build` to check for compilation errors and iterate on fixes, as instructed in the prompt. Each model runs in an isolated directory with no access to external files or directories.
 
-## Configuration
+### Configuration
 
 Edit the `Config` struct in `main.go` to adjust:
 
@@ -161,29 +164,29 @@ Edit the `Config` struct in `main.go` to adjust:
 - `ExecutionTimeout`: Max time for program execution (default: 10 seconds)
 - `PromptFile`: Path to prompt file (default: `prompt.txt`)
 
-## Metrics Collected
+### Metrics Collected
 
-### Performance
+#### Performance
 
 - Code generation time
 - Compilation time
 - Execution time
 
-### Correctness
+#### Correctness
 
 - Compilation success/failure
 - Execution success/failure
 - Compiler error messages
 - Runtime error messages
 
-### Code Quality
+#### Code Quality
 
 - Lines of code
 - Presence of comments
 - Formatting compliance (gofmt)
 - Static analysis issues (go vet)
 
-## Report Format
+### Report Format
 
 The generated markdown report includes:
 
@@ -191,7 +194,7 @@ The generated markdown report includes:
 - **Detailed results**: Per-model metrics, errors, and generated code snippets
 - **Timestamps**: When the test was run
 
-## Example Usage
+### Example Usage
 
 ```bash
 # Run comparison with default settings
@@ -219,7 +222,7 @@ diff output/model-1/main.go output/model-2/main.go
 make diff
 ```
 
-## Makefile Targets
+### Makefile Targets
 
 - `make build` - Build the comparison tool
 - `make run` - Build and run the full comparison  
@@ -231,14 +234,14 @@ make diff
 - `make deps` - Verify all dependencies are installed
 - `make help` - Show all available targets
 
-## Notes
+### Notes
 
 - **Cloud models are skipped**: Models with `:cloud` suffix are excluded (they require remote API access)
 - **Each model gets isolated directory**: Prevents Go package naming conflicts
 - **Generated code is preserved**: You can manually inspect, test, or modify any model's output
 - **Sequential execution**: Models are tested one at a time to avoid resource contention and ensure accurate timing
 
-## Troubleshooting
+### Troubleshooting
 
 **No models found:**
 
@@ -259,6 +262,6 @@ which opencode  # Verify OpenCode is installed and in PATH
 chmod +x run-comparison.sh clean-outputs.sh
 ```
 
-## License
+### License
 
 MIT
