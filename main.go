@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -207,7 +208,18 @@ func testModel(modelName, prompt string, config Config) ModelResult {
 
 	// Step 1: Generate code with OpenCode
 	fmt.Printf("   ⏳ Generating code...\n")
-	generatedCode, codeFile, genTime, err := generateCode(modelName, prompt, modelDir, config.GenerationTimeout)
+	// gpt-oss:20b does not have a native file-write tool in its tool set and fails
+	// to fall back to bash correctly. Augment its prompt to pre-empt that failure.
+	// All other models receive the unmodified prompt.
+	effectivePrompt := prompt
+	if strings.Contains(modelName, "gpt-oss") {
+		effectivePrompt = prompt + "\n\nIMPORTANT TOOL USAGE NOTE: There is no 'write' tool available in this environment. " +
+			"To create files you MUST use the bash tool. The bash tool requires two separate fields: " +
+			"'command' (the shell command to run) and 'description' (a short label). " +
+			"Example to write a file: command='cat > main.go << \\'GOEOF\\'\\npackage main\\n...(rest of code)...\\nGOEOF', description='Create main.go'. " +
+			"Do NOT put the description inside the command string."
+	}
+	generatedCode, codeFile, compileDir, genTime, err := generateCode(modelName, effectivePrompt, modelDir, config.GenerationTimeout)
 	result.GenerationTime = genTime
 	result.GeneratedCode = generatedCode
 
@@ -217,17 +229,20 @@ func testModel(modelName, prompt string, config Config) ModelResult {
 		return result
 	}
 
+	if compileDir != modelDir {
+		fmt.Printf("   ℹ️  Code found in subdirectory: %s\n", compileDir)
+	}
 	fmt.Printf("   ✅ Code generated (%d bytes) -> %s\n", len(generatedCode), filepath.Base(codeFile))
 
-	// Step 2: Initialize Go module in model directory
-	if err := initGoModule(modelDir, dirName); err != nil {
+	// Step 2: Initialize Go module in compile directory (skipped if go.mod already present)
+	if err := initGoModule(compileDir, dirName); err != nil {
 		result.CompileErrors = fmt.Sprintf("Failed to init module: %v", err)
 		return result
 	}
 
 	// Step 3: Compile the code
 	fmt.Printf("   ⏳ Compiling...\n")
-	compileSuccess, compileTime, compileErrors := compileCode(modelDir, config.CompileTimeout)
+	compileSuccess, compileTime, compileErrors := compileCode(compileDir, config.CompileTimeout)
 	result.CompileSuccess = compileSuccess
 	result.CompileTime = compileTime
 	result.CompileErrors = compileErrors
@@ -239,11 +254,11 @@ func testModel(modelName, prompt string, config Config) ModelResult {
 	fmt.Printf("   ✅ Compiled successfully\n")
 
 	// Step 4: Run code quality checks
-	result.CodeQualityMetrics = analyzeCodeQuality(codeFile, modelDir)
+	result.CodeQualityMetrics = analyzeCodeQuality(codeFile, compileDir)
 
 	// Step 5: Execute the binary
 	fmt.Printf("   ⏳ Running program...\n")
-	execSuccess, execTime, execOutput, execError := executeCode(modelDir, config.ExecutionTimeout)
+	execSuccess, execTime, execOutput, execError := executeCode(compileDir, config.ExecutionTimeout)
 	result.ExecutionSuccess = execSuccess
 	result.ExecutionTime = execTime
 	result.ExecutionOutput = execOutput
@@ -275,8 +290,9 @@ func normalizeModelName(modelName string) string {
 
 // generateCode invokes OpenCode to generate code for the prompt
 // OpenCode works by running in a directory and creating/modifying files there
-// Returns: code content, filepath of generated file, duration, error
-func generateCode(modelName, prompt, workDir string, timeout time.Duration) (string, string, time.Duration, error) {
+// Returns: code content, filepath of generated file, effective compile dir, duration, error
+// The compile dir may differ from workDir if the model wrote its output to a subdirectory.
+func generateCode(modelName, prompt, workDir string, timeout time.Duration) (string, string, string, time.Duration, error) {
 	start := time.Now()
 
 	// Create opencode.json config to allow file edits (needed for models like qwen3-coder)
@@ -310,7 +326,7 @@ func generateCode(modelName, prompt, workDir string, timeout time.Duration) (str
 }`
 	configPath := filepath.Join(workDir, "opencode.json")
 	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
-		return "", "", time.Since(start), fmt.Errorf("failed to create opencode.json: %v", err)
+		return "", "", "", time.Since(start), fmt.Errorf("failed to create opencode.json: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -336,29 +352,51 @@ func generateCode(modelName, prompt, workDir string, timeout time.Duration) (str
 
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return "", "", duration, fmt.Errorf("timeout after %v", timeout)
+			return "", "", "", duration, fmt.Errorf("timeout after %v", timeout)
 		}
-		return "", "", duration, fmt.Errorf("opencode failed: %v\nStderr: %s\nStdout: %s", err, stderr.String(), stdout.String())
+		return "", "", "", duration, fmt.Errorf("opencode failed: %v\nStderr: %s\nStdout: %s", err, stderr.String(), stdout.String())
 	}
 
-	// OpenCode creates files in the directory, so find any .go file
-	files, _ := filepath.Glob(filepath.Join(workDir, "*.go"))
-
+	// Search for .go files recursively — models sometimes write to subdirectories.
+	// We walk the tree and pick the shallowest .go file found; that file's directory
+	// becomes the effective compile root.
 	var codeFilePath string
 	var code []byte
 
-	if len(files) > 0 {
-		// Files were created - use the first one
-		codeFilePath = files[0]
+	var goFiles []string
+	_ = filepath.WalkDir(workDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !d.IsDir() && strings.HasSuffix(d.Name(), ".go") {
+			goFiles = append(goFiles, path)
+		}
+		return nil
+	})
+
+	effectiveCompileDir := workDir
+
+	if len(goFiles) > 0 {
+		// Use the shallowest file (fewest path components relative to workDir)
+		shallowest := goFiles[0]
+		for _, f := range goFiles[1:] {
+			rel1, _ := filepath.Rel(workDir, shallowest)
+			rel2, _ := filepath.Rel(workDir, f)
+			if len(strings.Split(rel2, string(filepath.Separator))) < len(strings.Split(rel1, string(filepath.Separator))) {
+				shallowest = f
+			}
+		}
+		codeFilePath = shallowest
+		effectiveCompileDir = filepath.Dir(codeFilePath)
 		code, err = os.ReadFile(codeFilePath)
 		if err != nil {
-			return "", "", duration, fmt.Errorf("could not read generated code: %v", err)
+			return "", "", "", duration, fmt.Errorf("could not read generated code: %v", err)
 		}
 	} else {
 		// No files created - try to extract code from stdout (some models output as markdown)
 		extractedCode, filename := extractCodeFromOutput(stdout.String())
 		if extractedCode == "" {
-			return "", "", duration, fmt.Errorf("no Go files generated\nStdout: %s\nStderr: %s", stdout.String(), stderr.String())
+			return "", "", "", duration, fmt.Errorf("no Go files generated\nStdout: %s\nStderr: %s", stdout.String(), stderr.String())
 		}
 
 		// Save the extracted code to a file
@@ -367,12 +405,12 @@ func generateCode(modelName, prompt, workDir string, timeout time.Duration) (str
 		}
 		codeFilePath = filepath.Join(workDir, filename)
 		if err := os.WriteFile(codeFilePath, []byte(extractedCode), 0644); err != nil {
-			return "", "", duration, fmt.Errorf("could not write extracted code: %v", err)
+			return "", "", "", duration, fmt.Errorf("could not write extracted code: %v", err)
 		}
 		code = []byte(extractedCode)
 	}
 
-	return string(code), codeFilePath, duration, nil
+	return string(code), codeFilePath, effectiveCompileDir, duration, nil
 }
 
 // extractCodeFromOutput tries to extract Go code from OpenCode's JSON output
@@ -500,8 +538,14 @@ func extractCodeFromOutput(output string) (string, string) {
 	return strings.TrimSpace(codeBlock.String()), filename
 }
 
-// initGoModule initializes a Go module in the specified directory
+// initGoModule initializes a Go module in the specified directory.
+// If go.mod already exists (e.g. the model wrote its own, or a prior run
+// left a stale file), it is left as-is to avoid a false negative.
 func initGoModule(dir, moduleName string) error {
+	if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+		// go.mod already present — nothing to do
+		return nil
+	}
 	cmd := exec.Command("go", "mod", "init", moduleName)
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
